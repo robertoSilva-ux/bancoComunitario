@@ -1,0 +1,100 @@
+[
+  {
+    "id": "schema.public",
+    "label": "Create schema \"public\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres"
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Create schema \"public\"",
+        "sql": "CREATE SCHEMA IF NOT EXISTS \"public\"",
+        "params": []
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "table.Account",
+    "label": "Create table \"Account\"",
+    "summary": "Creates table \"Account\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "Account"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"Account\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Account\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"Account\"",
+        "sql": "CREATE TABLE \"public\".\"Account\" (\n  \"balance\" numeric DEFAULT '0'::numeric NOT NULL,\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"document\" text NOT NULL,\n  \"holderName\" text NOT NULL,\n  \"id\" text NOT NULL,\n  \"updatedAt\" timestamptz NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"Account\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Account\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.Account.Account_document_key",
+    "label": "Add unique constraint on \"Account\" (document)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "Account_document_key",
+        "table": "Account"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"Account_document_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Account_document_key",
+          "public",
+          "\"public\".\"Account\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"Account_document_key\"",
+        "sql": "ALTER TABLE \"public\".\"Account\" ADD CONSTRAINT \"Account_document_key\" UNIQUE (\"document\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"Account_document_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Account_document_key",
+          "public",
+          "\"public\".\"Account\""
+        ]
+      }
+    ]
+  }
+]

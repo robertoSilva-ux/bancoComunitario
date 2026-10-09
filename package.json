@@ -18,14 +18,21 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "prisma skills sync || exit 0",
+    "contract:emit": "prisma contract emit"
   },
   "dependencies": {
+    "@prisma/client": "^7.10.0",
+    "@prisma/orm-postgres": "^8.0.0-rc.17",
+    "dotenv": "^18.0.6",
     "express": "^5.2.1"
   },
   "devDependencies": {
+    "@prisma/cli-engine": "^0.7.0",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.3",
+    "prisma": "^8.0.0-rc.22",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }

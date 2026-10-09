@@ -1,0 +1,22 @@
+// use prisma-8
+
+model Account {
+  id          String                   @id
+  holderName  String
+  document    String                   @unique
+  balance     Decimal                  @default(0)
+  createdAt   TimestamptzString        @default(now())
+  updatedAt   temporal.updatedAtString()
+  transactions Transaction[]
+}
+
+model Transaction {
+  id          String            @id
+  accountId   String
+  type        String            // "deposit" | "withdrawal"
+  amount      Decimal
+  description String?
+  createdAt   TimestamptzString @default(now())
+
+  account Account @relation(fields: [accountId], references: [id])
+}

@@ -1,0 +1,224 @@
+PROJETO INTEGRADOR – BANCO COMUNITÁRIO (COMMUNITY BANK API)
+ENTREGA 2: PROPOSTA ARQUITETURAL
+Data de Referência: 09/10/2026
+Autor: Roberto Fabiano Cunha da Silva
+Disciplina: Princípios e Padrões de Arquitetura (PPA) - IFRS Campus Rio Grande
+
+================================================================================
+1. ABORDAGEM ARQUITETURAL ADOTADA
+================================================================================
+
+A solução adotada para o Banco Comunitário baseia-se na combinação harmônica de:
+- Arquitetura Cliente-Servidor com API RESTful via HTTP/JSON;
+- Arquitetura em Camadas (Layered Architecture);
+- Princípios de Domain-Driven Design (DDD) com Modelo de Domínio Rico (Rich Domain Model);
+- Inversão/Injeção de Dependências (Dependency Injection - DI).
+
+Justificativa da Abordagem:
+Bancos comunitários lidam com regras financeiras e sociais sensíveis (ex.: validação de CPF/CNPJ, impedimento de saques a descoberto sem autorização, integridade de saldo e registro fidedigno de depósitos/saques). A lógica de negócio e as regras operacionais possuem alta estabilidade e valor, enquanto componentes de interface (clientes web/mobile), frameworks HTTP (Express) e mecanismos de persistência (PostgreSQL, Prisma ORM) são detalhes técnicos que podem evoluir. O desacoplamento em camadas com domínio rico assegura que as regras do banco comunitário permaneçam centralizadas e protegidas contra contaminações de infraestrutura.
+
+
+================================================================================
+2. ORGANIZAÇÃO DOS MÓDULOS E RESPONSABILIDADES DAS PARTES
+================================================================================
+
+O sistema é particionado nas seguintes camadas e responsabilidades:
+
+1. Camada de Apresentação / Interface (Presentation Layer)
+   - Diretórios/Arquivos: src/routes/ (account.routes.ts, operation.routes.ts), src/controllers/ (AccountController.ts, OperationController.ts).
+   - Responsabilidade: Receber as requisições HTTP, efetuar a validação superficial de tipos e parâmetros de entrada, direcionar a execução para a camada de serviço correspondente e serializar a resposta em formato JSON semântico com os códigos HTTP adequados (200 OK, 201 Created, 400 Bad Request, 404 Not Found, 422 Unprocessable Entity, 500 Internal Server Error).
+   - Regra estrita: Não contém regras de negócio bancárias nem interage diretamente com banco de dados ou ORM.
+
+2. Camada de Aplicação / Casos de Uso (Application Layer)
+   - Diretórios/Arquivos: src/services/ (AccountService.ts).
+   - Responsabilidade: Orquestrar os casos de uso do sistema. Coordena a verificação de duplicidade de documentos, instanciação das entidades de domínio rico, persistência através dos repositórios injetados e registro de eventos/transações financeiras.
+   - Regra estrita: Não conhece detalhes de protocolo HTTP (req, res, headers) e depende de abstrações de repositórios fornecidas via Injeção de Dependências.
+
+3. Camada de Domínio (Domain Layer)
+   - Diretórios/Arquivos: src/models/ (Account.ts, Transaction.ts).
+   - Responsabilidade: Núcleo do sistema (Core Domain). Encapsula os atributos fundamentais e a lógica intrínseca às operações.
+     * Account: controla e valida o nome do titular, documento (CPF/CNPJ) e saldo. Garante invariantes: o saldo não pode iniciar negativo, saques não podem exceder o saldo existente e operações de depósito/saque devem ter valores estritamente positivos.
+     * Transaction: garante a consistência do registro financeiro (tipo "deposit" ou "withdrawal", quantia maior que zero, vinculação obrigatória com conta e carimbo temporal).
+   - Regra estrita: Independência total de frameworks externos ou bibliotecas de banco de dados.
+
+4. Camada de Persistência / Infraestrutura (Persistence/Infrastructure Layer)
+   - Diretórios/Arquivos: src/repositories/ (AccountRepository.ts, TransactionRepository.ts), src/prisma/ (db.ts, contract.prisma, contract.json).
+   - Responsabilidade: Implementar a comunicação com a base de dados PostgreSQL através do Prisma 8 ORM. Converte dados brutos (tipos escalares/numéricos persistidos) em entidades de domínio ricas e vice-versa.
+   - Regra estrita: Não decide regras de negócio; limita-se a armazenar e recuperar o estado das entidades.
+
+
+================================================================================
+3. DEPENDÊNCIAS E FORMAS DE COMUNICAÇÃO
+================================================================================
+
+- Direção das Dependências: A comunicação ocorre de cima para baixo de forma unidirecional e controlada:
+  Client -> Routes -> Controllers -> Services -> Repositories -> ORM/Database
+  e os Models (Domínio) permeiam os fluxos sendo manipulados pelo Service e pelo Repository.
+- Injeção de Dependências: O AccountService recebe instâncias de AccountRepository e TransactionRepository em seu construtor, desacoplando a camada de aplicação da instanciação concreta de infraestrutura e permitindo fácil substituição por mocks em testes.
+- Comunicação Externa: Ocorre via protocolo HTTP 1.1/2 sobre TCP/IP utilizando payloads no padrão JSON.
+- Comunicação Interna: Chamadas assíncronas em TypeScript baseadas em Promises (async/await), garantindo operações de E/S não-bloqueantes no Node.js.
+
+
+================================================================================
+4. RELAÇÃO DA PROPOSTA AOS ASRS E ATRIBUTOS DE QUALIDADE
+================================================================================
+
+- Modificabilidade / Manutenibilidade (ASR 1):
+  A separação estrita de camadas garante que mudanças na forma de persistência (por exemplo, migrar do PostgreSQL para outro SGBD ou mudar a biblioteca de ORM) impactem exclusivamente a camada de repositórios, deixando controladores e modelos intactos.
+- Confiabilidade / Integridade de Dados (ASR 2):
+  A encapsulação de regras no Modelo de Domínio Rico (Account.withdraw, Account.deposit) impossibilita a criação ou modificação de contas com saldos inconsistentes ou negativos em qualquer ponto do sistema.
+- Testabilidade (ASR 3):
+  A introdução de Injeção de Dependências no AccountService permite que testes unitários e de integração validem regras de crédito, saques e depósitos simulando repositórios em memória, sem necessidade de banco de dados ativo.
+- Desempenho / Eficiência (ASR 4):
+  Uso de I/O assíncrono nativo do Node.js, aliado à consulta otimizada no Prisma e indexação única no banco de dados (document @unique, accountId), garantindo tempos de resposta na faixa de dezenas de milissegundos para requisições de operações financeiras.
+
+
+================================================================================
+5. ALTERNATIVAS ARQUITETURAIS CONSIDERADAS E JUSTIFICATIVAS
+================================================================================
+
+Alternativa 1 Considerada: Arquitetura Hexagonal (Ports and Adapters)
+- Análise: Forneceria o mais alto grau de desacoplamento através da criação explícita de interfaces de entrada (Driver Ports) e de saída (Driven Ports), adaptadores web e adaptadores de banco de dados.
+- Motivo da Não-Adoção Completa neste Momento: Introduziria alta cerimônia arquitetural e boilerplate de mappers excessivos para o estágio inicial de desenvolvimento do Banco Comunitário.
+
+Alternativa 2 Considerada: Monólito Orientado a Microsserviços
+- Análise: Dividir o banco em serviços independentes (ex.: Serviço de Contas, Serviço de Crédito Solidário, Serviço de Notificações).
+- Motivo da Não-Adoção: Aumento desnecessário de complexidade operacional (rede, consistência eventual, orquestração e custos de infraestrutura) para uma aplicação cujos limites de domínio ainda estão em consolidação.
+
+Justificativa da Escolha Atual:
+Optou-se pela Arquitetura em Camadas com Domínio Rico e Injeção de Dependências como a solução mais pragmática e balanceada. Ela viabiliza clareza estrutural imediata, baixo custo de manutenção e facilidade de evolução contínua para Hexagonal ou Microsserviços caso a escala do banco comunitário demande no futuro.
+
+
+================================================================================
+6. IDENTIFICAÇÃO DE TRADE-OFFS
+================================================================================
+
+1. Simplicidade vs. Desacoplamento Puro de Domínio:
+   - Escolha: Camadas com Domínio Rico em vez de Hexagonal estrito.
+   - Trade-off positivo: Rápida velocidade de entrega, código conciso, menos classes intermediárias e menor curva de aprendizado.
+   - Trade-off negativo: A camada de repositórios conhece tanto o ORM quanto a entidade de domínio, exigindo rigor no time para não vazar lógicas de persistência para as entidades.
+
+2. Flexibilidade vs. Consistência Transacional:
+   - Escolha: Repositórios desacoplados e operando de forma autônoma.
+   - Trade-off positivo: Facilidade de leitura e separação modular entre contas e histórico de transações.
+   - Trade-off negativo: Operações combinadas (ex.: salvar conta + salvar transação) demandam transações coordenadas para garantir atomicidade plena em cenários de alta concorrência.
+
+
+================================================================================
+7. DIAGRAMA ARQUITETURAL DA PROPOSTA
+================================================================================
+
++-----------------------------------------------------------------------------+
+|                                CLIENTES                                     |
+|           [ Aplicação Web / Mobile / Postman / Dispositivos ]                |
++-----------------------------------------------------------------------------+
+                                      │ HTTP Requests (JSON)
+                                      ▼
++-----------------------------------------------------------------------------+
+|                        CAMADA DE APRESENTAÇÃO                               |
+|                                                                             |
+|   [ Express Router ]                                                        |
+|         │                                                                   |
+|         ├──> accountRouter     (POST /accounts, GET /accounts)             |
+|         └──> operationRouter   (POST /deposits, POST /withdrawals, etc.)    |
+|                     │                                                       |
+|                     ▼                                                       |
+|   [ Controllers ]                                                           |
+|         ├──> AccountController                                              |
+|         └──> OperationController                                            |
++-----------------------------------------------------------------------------+
+                                      │ Invoca Casos de Uso
+                                      ▼
++-----------------------------------------------------------------------------+
+|                         CAMADA DE APLICAÇÃO                                 |
+|                                                                             |
+|   [ Services ]                                                              |
+|         └──> AccountService                                                 |
+|                   │                                                         |
+|                   ├──> Orquestra regras de negócio e fluxos                 |
+|                   ├──> Injeta: AccountRepository, TransactionRepository     |
++-----------------------------------------------------------------------------+
+               │                                            │
+               │ Manipula instâncias                        │ Persiste/Consulta
+               ▼                                            ▼
++-----------------------------+           +-----------------------------------+
+|      CAMADA DE DOMÍNIO      |           |     CAMADA DE PERSISTÊNCIA        |
+|                             |           |                                   |
+|  [ Rich Domain Models ]     |           |  [ Repositories ]                 |
+|    ├── Account              |<──────────┤    ├── AccountRepository          |
+|    │     - id, holderName   |  Mapeia   |    └── TransactionRepository      |
+|    │     - balance, document|           |               │                   |
+|    │     + deposit()        |           |               ▼                   |
+|    │     + withdraw()       |           |  [ Prisma 8 ORM Client ]          |
+|    │                        |           |               │                   |
+|    └── Transaction          |           +───────────────┼───────────────────+
+|          - type, amount     |                           │ SQL / TCP
+|          - accountId, date  |                           ▼
++-----------------------------+           +-----------------------------------+
+                                          |          BANCO DE DADOS           |
+                                          |            PostgreSQL             |
+                                          +-----------------------------------+
+
+
+================================================================================
+8. PARTE PRÁTICA MÍNIMA: FUNCIONALIDADES IMPLEMENTADAS (ENTREGA 2)
+================================================================================
+
+8.1. Funcionalidades Desenvolvidas na Entrega 2
+Na Entrega 1 haviam sido criadas a configuração base, o ambiente de desenvolvimento e as rotas de verificação técnica (/ e /health).
+Para a Entrega 2, foi implementado o núcleo operacional do Banco Comunitário com as seguintes funcionalidades:
+
+1. Abertura e Listagem de Contas:
+   - POST /accounts: Abertura de conta corrente para morador/empreendedor.
+   - GET /accounts: Listagem das contas comunitárias ativas.
+2. Depósito em Conta Corrente (Nova Operação Financeira):
+   - POST /accounts/:id/deposits: Incrementa o saldo da conta e gera histórico auditável.
+3. Saque com Validação de Saldo (Nova Operação Financeira):
+   - POST /accounts/:id/withdrawals: Decrementa o saldo com verificação de liquidez e gera registro.
+4. Consulta de Extrato Bancário (Nova Operação de Transparência):
+   - GET /accounts/:id/statement: Retorna os dados da conta, saldo consolidado e histórico completo de movimentações ordenadas cronologicamente.
+
+8.2. Detalhamento do Fluxo de Execução (Exemplo: Depósito e Saque)
+Tomando como exemplo a operação de Saque (POST /accounts/:id/withdrawals):
+
+1. Cliente:
+   Envia requisição POST para /accounts/42ad4d.../withdrawals com body { "amount": 50, "description": "Compra na feira local" }.
+
+2. Camada de Apresentação (Router & Controller):
+   - operationRouter direciona para OperationController.withdraw.
+   - OperationController extrai os parâmetros (id, amount, description) e chama o método accountService.withdraw(id, amount, description).
+
+3. Camada de Aplicação (AccountService):
+   - O AccountService utiliza this.accountRepository.findById(id) para buscar a conta.
+   - Caso a conta não exista, dispara exceção "Conta não encontrada.".
+   - Estando a conta presente, executa a operação no domínio: account.withdraw(amount).
+
+4. Camada de Domínio (Account & Transaction):
+   - O método account.withdraw valida se amount <= 0 e se o saldo atual é suficiente (this._balance < amount). Em caso de insuficiência, lança "Saldo insuficiente para realizar o saque.".
+   - Se aprovado, debita o valor do saldo interno da conta.
+   - Uma nova entidade Transaction é instanciada com tipo "withdrawal", gerando UUID e carimbo de data/hora validados internamente.
+
+5. Camada de Persistência (AccountRepository & TransactionRepository):
+   - O AccountService chama this.accountRepository.save(account) para persistir o novo saldo via Prisma ORM no PostgreSQL.
+   - O AccountService chama this.transactionRepository.save(transaction) para gravar a movimentação na tabela Transaction.
+
+6. Resposta ao Cliente:
+   - O Controller recebe o resultado, monta um payload padronizado e responde com HTTP 200 OK contendo os dados da transação efetuada e o novo saldo.
+   - Caso o domínio tenha rejeitado por saldo insuficiente, o Controller captura a exceção e responde com HTTP 422 Unprocessable Entity e mensagem descritiva.
+
+8.3. Relação com a Proposta Arquitetural
+Essa implementação comprova a viabilidade da arquitetura proposta:
+- Separação real de responsabilidades (HTTP desconhece SQL; Domínio desconhece HTTP e SQL).
+- Injeção explícita de dependências nas rotas e serviços.
+- Proteção da consistência bancária através de modelos ricos e testes operacionais.
+
+
+================================================================================
+9. LINK DO REPOSITÓRIO E BRANCH CORRESPONDENTE
+================================================================================
+
+Repositório no GitHub:
+https://github.com/robertoSilva-ux/bancoComunitario
+
+Branch correspondente à Entrega 2:
+https://github.com/robertoSilva-ux/bancoComunitario/tree/entrega-2
