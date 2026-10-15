@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import { AccountService } from "../services/AccountService.js";
+import { respondError } from "../http/errorHandler.js";
+import { optionalText, requireMoney } from "../http/validation.js";
 
 export class OperationController {
     constructor(private accountService: AccountService) { }
@@ -7,7 +9,8 @@ export class OperationController {
     public deposit = async (req: Request, res: Response): Promise<Response> => {
         try {
             const id = req.params.id as string;
-            const { amount, description } = req.body;
+            const amount = requireMoney(req.body?.amount, "amount");
+            const description = optionalText(req.body?.description, "description");
 
             const result = await this.accountService.deposit(id, amount, description);
 
@@ -22,18 +25,16 @@ export class OperationController {
                 },
                 balance: result.balance,
             });
-        } catch (error: any) {
-            const statusCode = error.message.includes("não encontrada") ? 404 : 400;
-            return res.status(statusCode).json({
-                error: error.message || "Erro ao processar depósito.",
-            });
+        } catch (error) {
+            return respondError(res, error);
         }
     };
 
     public withdraw = async (req: Request, res: Response): Promise<Response> => {
         try {
             const id = req.params.id as string;
-            const { amount, description } = req.body;
+            const amount = requireMoney(req.body?.amount, "amount");
+            const description = optionalText(req.body?.description, "description");
 
             const result = await this.accountService.withdraw(id, amount, description);
 
@@ -48,14 +49,8 @@ export class OperationController {
                 },
                 balance: result.balance,
             });
-        } catch (error: any) {
-            const statusCode =
-                error.message.includes("não encontrada")
-                    ? 404
-                    : error.message.includes("insuficiente") ? 422 : 400;
-            return res.status(statusCode).json({
-                error: error.message || "Erro ao processar saque.",
-            });
+        } catch (error) {
+            return respondError(res, error);
         }
     };
 
@@ -76,11 +71,8 @@ export class OperationController {
                     createdAt: t.createdAt,
                 })),
             });
-        } catch (error: any) {
-            const statusCode = error.message.includes("não encontrada") ? 404 : 500;
-            return res.status(statusCode).json({
-                error: error.message || "Erro ao buscar extrato.",
-            });
+        } catch (error) {
+            return respondError(res, error);
         }
     };
 }

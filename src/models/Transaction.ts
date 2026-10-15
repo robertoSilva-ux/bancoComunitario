@@ -1,9 +1,14 @@
+import { Money } from "./Money.js";
+import { ValidationError } from "./errors.js";
+
+export type TransactionType = "deposit" | "withdrawal";
+
 export class Transaction {
     constructor(
         public readonly id: string,
         public readonly accountId: string,
-        public readonly type: "deposit" | "withdrawal",
-        public readonly amount: number,
+        public readonly type: TransactionType,
+        public readonly amount: Money,
         public readonly description: string | null,
         public readonly createdAt: Date = new Date(),
     ) {
@@ -12,13 +17,13 @@ export class Transaction {
 
     private validate(): void {
         if (!this.accountId || this.accountId.trim() === "") {
-            throw new Error("O ID da conta é obrigatório.");
+            throw new ValidationError("O ID da conta é obrigatório.");
         }
-        if (this.amount <= 0) {
-            throw new Error("O valor da transação deve ser maior que zero.");
+        if (this.amount.isZero() || this.amount.isNegative()) {
+            throw new ValidationError("O valor da transação deve ser maior que zero.");
         }
         if (this.type !== "deposit" && this.type !== "withdrawal") {
-            throw new Error('O tipo de transação deve ser "deposit" ou "withdrawal".');
+            throw new ValidationError('O tipo de transação deve ser "deposit" ou "withdrawal".');
         }
     }
 }

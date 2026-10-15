@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import { AccountService } from "../services/AccountService.js";
+import { respondError } from "../http/errorHandler.js";
+import { optionalMoney, requireString } from "../http/validation.js";
 
 export class AccountController {
     // Injetamos o serviço no controlador
@@ -7,7 +9,10 @@ export class AccountController {
 
     public create = async (req: Request, res: Response): Promise<Response> => {
         try {
-            const { holderName, document, initialBalance } = req.body;
+            // Fronteira: só daqui saem tipos confiáveis para o service.
+            const holderName = requireString(req.body?.holderName, "holderName");
+            const document = requireString(req.body?.document, "document");
+            const initialBalance = optionalMoney(req.body?.initialBalance, "initialBalance");
 
             // Delega a lógica de negócio para o Service
             const newAccount = await this.accountService.createAccount({
@@ -16,7 +21,8 @@ export class AccountController {
                 initialBalance,
             });
 
-            // Responde com sucesso (Código HTTP 201: Created)
+            // Responde com sucesso (Código HTTP 201: Created).
+            // `balance` é um Money: o toJSON dele emite a string decimal ("100.00").
             return res.status(201).json({
                 message: "Conta criada com sucesso no banco comunitário!",
                 account: {
@@ -27,12 +33,8 @@ export class AccountController {
                     createdAt: newAccount.createdAt,
                 },
             });
-        } catch (error: any) {
-            // Caso ocorra um erro de regra de negócio (ex: CPF duplicado ou dados inválidos),
-            // retornamos o erro com o código HTTP 400 (Bad Request)
-            return res.status(400).json({
-                error: error.message || "Erro desconhecido ao processar o pedido.",
-            });
+        } catch (error) {
+            return respondError(res, error);
         }
     };
 
@@ -50,10 +52,8 @@ export class AccountController {
             }));
 
             return res.status(200).json(formattedAccounts);
-        } catch (error: any) {
-            return res.status(500).json({
-                error: error.message || "Erro interno ao buscar as contas.",
-            });
+        } catch (error) {
+            return respondError(res, error);
         }
     };
 }
