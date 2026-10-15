@@ -1,3 +1,11 @@
 node_modules/
 dist/
 .env
+
+# Skills que o postinstall (`prisma skills sync`) regenera a cada `npm install`.
+# Continuam no disco, mas saem do versionamento: ~4 mil linhas de conteúdo de
+# fornecedor dentro do entregável, duplicadas em quatro diretórios de agentes.
+.claude/skills/
+.cursor/skills/
+.agents/skills/
+.devin/skills/
