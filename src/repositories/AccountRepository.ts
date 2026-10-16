@@ -2,6 +2,7 @@ import { db, type Client } from "../prisma/db.js";
 import { Account } from "../models/Account.js";
 import { Money } from "../models/Money.js";
 import { ConflictError } from "../models/errors.js";
+import { isUniqueViolationOn } from "../prisma/uniqueConstraint.js";
 
 /** Linha de `Account` como o Prisma 8 entrega (numeric e timestamptz vêm como string). */
 interface RawAccount {
@@ -42,29 +43,12 @@ function toDomain(rawData: RawAccount): Account {
 }
 
 /**
- * Reconhece a violação da constraint única de `document`.
- *
- * O driver entrega um `SqlQueryError` com `sqlState`/`constraint` estruturados
- * (é o que se usa aqui); o texto da mensagem fica só como rede de segurança.
- */
-function isDuplicateDocumentError(error: unknown): boolean {
-    const candidate = error as { sqlState?: unknown; constraint?: unknown } | null;
-
-    if (candidate?.sqlState === "23505" && candidate.constraint === "Account_document_key") {
-        return true;
-    }
-
-    const text = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-    return text.includes("Account_document_key");
-}
-
-/**
- * Traduz a violação da constraint única de `document` (PostgreSQL 23505) no erro
- * de domínio correspondente. O pré-check do service cobre o caso comum; isto cobre
- * a corrida entre duas requisições simultâneas, em que só o banco pode decidir.
+ * Traduz a violação da constraint única de `document` no erro de domínio
+ * correspondente. O pré-check do service cobre o caso comum; isto cobre a corrida
+ * entre duas requisições simultâneas, em que só o banco pode decidir.
  */
 function toSaveError(error: unknown): unknown {
-    if (isDuplicateDocumentError(error)) {
+    if (isUniqueViolationOn(error, "Account_document_key")) {
         return new ConflictError("Já existe uma conta cadastrada com este documento.");
     }
 

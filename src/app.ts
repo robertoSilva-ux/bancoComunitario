@@ -1,6 +1,7 @@
 import express from "express"
 import accountRouter from "./routes/account.routes.js";
 import operationRouter from "./routes/operation.routes.js";
+import solidarityCreditRouter from "./solidarity-credit/adapters/http/solidarity-credit.routes.js";
 
 export const app = express()
 
@@ -13,6 +14,7 @@ app.get("/", (_request, response)=>{
 
 app.use(accountRouter);
 app.use(operationRouter);
+app.use(solidarityCreditRouter);
 
 app.get("/health", (_request, response)=>{
     return response.status(200).json({status: "ok"})

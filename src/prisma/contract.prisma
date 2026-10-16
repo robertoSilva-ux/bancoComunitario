@@ -20,3 +20,25 @@ model Transaction {
 
   account Account @relation(fields: [accountId], references: [id])
 }
+
+// Módulo de crédito solidário (arquitetura hexagonal).
+model SolidarityEnterprise {
+  id             String                   @id
+  name           String
+  document       String                   @unique
+  createdAt      TimestamptzString        @default(now())
+  updatedAt      temporal.updatedAtString()
+  creditRequests CreditRequest[]
+}
+
+model CreditRequest {
+  id           String                   @id
+  enterpriseId String
+  amount       Decimal
+  purpose      String
+  status       String                   // "pending" nesta atividade
+  createdAt    TimestamptzString        @default(now())
+  updatedAt    temporal.updatedAtString()
+
+  enterprise SolidarityEnterprise @relation(fields: [enterpriseId], references: [id])
+}
